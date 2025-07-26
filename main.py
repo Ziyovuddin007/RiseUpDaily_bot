@@ -1,6 +1,7 @@
 import logging
 import random
 import os
+import json
 from dotenv import load_dotenv
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
@@ -14,6 +15,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+STATE_FILE = "bot_state.json"
+
 # Load quotes from a file
 try:
     with open('quotes.txt', 'r', encoding='utf-8') as f:
@@ -25,6 +28,21 @@ except FileNotFoundError:
     logger.error("'quotes.txt' not found.")
     quotes = ["Xatolik: Motivatsion xabarlar fayli topilmadi."]
 
+
+def load_state():
+    """Loads the bot state from a JSON file."""
+    try:
+        with open(STATE_FILE, 'r') as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {"last_quote_index": 0}
+
+
+def save_state(state):
+    """Saves the bot state to a JSON file."""
+    with open(STATE_FILE, 'w') as f:
+        json.dump(state, f)
+
 # Define a command handler. 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Send a message when the command /start is issued."""
@@ -34,9 +52,20 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 async def quote(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Send a random quote."""
-    random_quote = random.choice(quotes)
-    await update.message.reply_text(random_quote)
+    """Send the next quote in sequence."""
+    state = load_state()
+    current_index = state.get("last_quote_index", 0)
+
+    # Ensure index is within bounds
+    if current_index >= len(quotes):
+        current_index = 0
+
+    quote_to_send = quotes[current_index]
+    await update.message.reply_text(quote_to_send)
+
+    # Update the state for the next quote
+    next_index = (current_index + 1) % len(quotes)
+    save_state({"last_quote_index": next_index})
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Displays info on how to use the bot."""
